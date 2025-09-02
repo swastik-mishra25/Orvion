@@ -8,7 +8,7 @@ import Loading from "@/components/Loading";
 
 const ProductList = () => {
 
-  const { router } = useAppContext()
+  const { router, getToken, user } = useAppContext()
 
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
