@@ -1,29 +1,58 @@
 import mongoose from "mongoose";
+import { getConnectionCache } from "@/lib/db/cache";
+import { getServerlessMongooseOptions } from "@/lib/db/options";
+import { registerConnectionEvents } from "@/lib/db/events";
 
-let cached = global.mongoose
-
-if (!cached) {
-    cached = global.mongoose = { conn: null, promise: null }
-}
-
+/**
+ * Serverless-optimized MongoDB connection singleton.
+ * Reuses the active cached connection or in-flight promise across
+ * serverless executions and Next.js Hot Module Replacement.
+ *
+ * @returns {Promise<import('mongoose').Mongoose>}
+ */
 async function connectDB() {
-    if (cached.conn) {
-        return cached.conn
+  const cached = getConnectionCache();
+
+  if (cached.conn) {
+    return cached.conn;
+  }
+
+  if (!cached.promise) {
+    const mongoUri = process.env.MONGODB_URI;
+    if (!mongoUri) {
+      throw new Error(
+        "Invalid/Missing environment variable: 'MONGODB_URI'. Please define it in your environment configuration."
+      );
     }
-    if (!cached.promise) {
-        const opts = {
-            bufferCommands: false
-        }
 
-        cached.promise = mongoose.connect(`${process.env.MONGODB_URI}/orvion`,opts).then( mongoose => {
-            return mongoose
-        })
+    // Attach lifecycle listeners once
+    registerConnectionEvents();
 
-    }
+    const options = {
+      ...getServerlessMongooseOptions(),
+      dbName: "orvion",
+    };
 
-    cached.conn = await cached.promise
-    return cached.conn
+    cached.promise = mongoose
+      .connect(mongoUri, options)
+      .then((mongooseInstance) => {
+        return mongooseInstance;
+      })
+      .catch((error) => {
+        // Reset promise cache so subsequent invocations can retry
+        cached.promise = null;
+        throw error;
+      });
+  }
 
+  try {
+    cached.conn = await cached.promise;
+  } catch (error) {
+    cached.promise = null;
+    throw error;
+  }
+
+  return cached.conn;
 }
 
-export default connectDB
+export default connectDB;
