@@ -17,42 +17,42 @@ async function connectDB() {
     return cached.conn;
   }
 
-  if (!cached.promise) {
-    const mongoUri = process.env.MONGODB_URI;
-    if (!mongoUri) {
-      throw new Error(
-        "Invalid/Missing environment variable: 'MONGODB_URI'. Please define it in your environment configuration."
-      );
-    }
+      if (!cached.promise) {
+        const mongoUri = process.env.MONGODB_URI;
+        if (!mongoUri) {
+          throw new Error(
+            "Invalid/Missing environment variable: 'MONGODB_URI'. Please define it in your environment configuration."
+          );
+        }
 
-    // Attach lifecycle listeners once
-    registerConnectionEvents();
+          // Attach lifecycle listeners once
+          registerConnectionEvents();
 
-    const options = {
-      ...getServerlessMongooseOptions(),
-      dbName: "orvion",
-    };
+        const options = {
+          ...getServerlessMongooseOptions(),
+          dbName: "orvion",
+        };
 
-    cached.promise = mongoose
-      .connect(mongoUri, options)
-      .then((mongooseInstance) => {
-        return mongooseInstance;
-      })
-      .catch((error) => {
-        // Reset promise cache so subsequent invocations can retry
+        cached.promise = mongoose
+          .connect(mongoUri, options)
+          .then((mongooseInstance) => {
+            return mongooseInstance;
+          })
+          .catch((error) => {
+            // Reset promise cache so subsequent invocations can retry
+            cached.promise = null;
+            throw error;
+          });
+      }
+
+      try {
+        cached.conn = await cached.promise;
+      } catch (error) {
         cached.promise = null;
         throw error;
-      });
-  }
+      }
 
-  try {
-    cached.conn = await cached.promise;
-  } catch (error) {
-    cached.promise = null;
-    throw error;
-  }
+      return cached.conn;
+    }
 
-  return cached.conn;
-}
-
-export default connectDB;
+    export default connectDB;
